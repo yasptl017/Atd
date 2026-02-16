@@ -1,9 +1,6 @@
 <?php
-session_start();
-if (!isset($_SESSION['Name'])) {
-    // header("Location: index.php");
-    // exit();
-}
+require_once __DIR__ . '/auth.php';
+require_login();
 $header_enrollment_search = htmlspecialchars(trim((string)($_GET['enrollment'] ?? '')));
 ?>
 <header class="app-header fixed-top">

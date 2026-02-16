@@ -1,4 +1,7 @@
 <?php
+require_once __DIR__ . '/auth.php';
+require_login();
+
 $mysqli = new mysqli("localhost", "root", "", "kdpmis");
 
 // Check connection

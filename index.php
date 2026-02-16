@@ -1,5 +1,10 @@
 <?php
-session_start();
+require_once __DIR__ . '/auth.php';
+if (trim((string)($_SESSION['Name'] ?? '')) !== '') {
+    header("Location: home.php");
+    exit();
+}
+
 include('dbconfig.php');
 
 if ($_SERVER['REQUEST_METHOD'] == 'POST') {
@@ -15,6 +20,7 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST') {
         $user = $result->fetch_assoc();
         if ($password == $user['password']) {
             if ($user['status'] == 1) {
+                session_regenerate_id(true);
                 $_SESSION['Name'] = $user['Name'];
                 header("Location: home.php");
                 exit();
