@@ -100,6 +100,58 @@ if (!$students_result) {
     $students_result = $conn->query("SELECT id, enrollmentNo, name, tutBatch FROM students WHERE 1 = 0");
 }
 $total_students = $students_result->num_rows;
+
+// ── Autofill: today's related attendance records ──────────────────────────────
+$tut_enrollments = [];
+if ($total_students > 0) {
+    $students_result->data_seek(0);
+    while ($s = $students_result->fetch_assoc()) {
+        if (!empty($s['enrollmentNo'])) $tut_enrollments[] = $s['enrollmentNo'];
+    }
+    $students_result->data_seek(0);
+}
+
+$autofill_records = [];
+if (!empty($tut_enrollments)) {
+    $att_date_esc = $conn->real_escape_string($data['date']);
+
+    // Lecture records today — filter to students in selected tutorial batches
+    $lec_res = $conn->query("SELECT id, subject, class, time, presentNo FROM lecattendance WHERE term='{$escaped_term}' AND sem='{$escaped_sem}' AND date='{$att_date_esc}' ORDER BY id DESC");
+    if ($lec_res) {
+        while ($row = $lec_res->fetch_assoc()) {
+            $all  = array_filter(array_map('trim', explode(',', (string)$row['presentNo'])));
+            $filt = array_values(array_intersect($all, $tut_enrollments));
+            if (!empty($filt)) {
+                $autofill_records[] = ['type' => 'Lecture', 'label' => 'Lecture · ' . $row['subject'] . ' · Class ' . $row['class'] . ' · ' . $row['time'], 'present' => $filt];
+            }
+        }
+    }
+
+    // Lab records today — filter to students in selected tutorial batches
+    $lab_res = $conn->query("SELECT id, subject, batch, presentNo FROM labattendance WHERE term='{$escaped_term}' AND sem='{$escaped_sem}' AND date='{$att_date_esc}' AND labNo IS NOT NULL AND labNo!='' ORDER BY id DESC");
+    if ($lab_res) {
+        while ($row = $lab_res->fetch_assoc()) {
+            $all  = array_filter(array_map('trim', explode(',', (string)$row['presentNo'])));
+            $filt = array_values(array_intersect($all, $tut_enrollments));
+            if (!empty($filt)) {
+                $autofill_records[] = ['type' => 'Lab', 'label' => 'Lab · ' . $row['subject'] . ' · Batch ' . $row['batch'], 'present' => $filt];
+            }
+        }
+    }
+
+    // Other tutorial records today — filter to students in selected tutorial batches
+    $tut_res2 = $conn->query("SELECT id, subject, batch, presentNo FROM labattendance WHERE term='{$escaped_term}' AND sem='{$escaped_sem}' AND date='{$att_date_esc}' AND (labNo IS NULL OR labNo='') ORDER BY id DESC");
+    if ($tut_res2) {
+        while ($row = $tut_res2->fetch_assoc()) {
+            $all  = array_filter(array_map('trim', explode(',', (string)$row['presentNo'])));
+            $filt = array_values(array_intersect($all, $tut_enrollments));
+            if (!empty($filt)) {
+                $autofill_records[] = ['type' => 'Tutorial', 'label' => 'Tutorial · ' . $row['subject'] . ' · Batch ' . $row['batch'], 'present' => $filt];
+            }
+        }
+    }
+}
+// ─────────────────────────────────────────────────────────────────────────────
 ?>
 
 <!DOCTYPE html>
@@ -127,6 +179,30 @@ $total_students = $students_result->num_rows;
                 <p><strong>Date:</strong> <?= htmlspecialchars($data['date']) ?></p>
                 <p><strong>Slot:</strong> <?= htmlspecialchars($data['slot']) ?></p>
             </div>
+
+            <!-- Autofill Panel -->
+            <?php if (!empty($autofill_records)): ?>
+            <div class="app-card app-card-body shadow-sm mb-4">
+                <h5 class="mb-2"><i class="bi bi-lightning-charge-fill text-warning me-1"></i>Today's Attendance — Click to Autofill</h5>
+                <p class="text-muted mb-2" style="font-size:0.82rem;">Only students in tutorial batch(es) <strong><?= htmlspecialchars(implode(', ', $selected_tut_batches)) ?></strong> will be marked.</p>
+                <div class="d-flex flex-wrap gap-2">
+                    <?php
+                    $badge_colors = ['Lecture' => 'primary', 'Lab' => 'danger', 'Tutorial' => 'success'];
+                    foreach ($autofill_records as $rec):
+                        $color = $badge_colors[$rec['type']] ?? 'secondary';
+                    ?>
+                    <button type="button"
+                            class="btn btn-outline-<?= $color ?> btn-sm autofill-btn"
+                            data-present="<?= htmlspecialchars(json_encode($rec['present'])) ?>"
+                            title="<?= htmlspecialchars($rec['label']) ?> (<?= count($rec['present']) ?> students from these batches)">
+                        <i class="bi bi-clipboard-check me-1"></i>
+                        <?= htmlspecialchars($rec['label']) ?>
+                        <span class="badge bg-<?= $color ?> ms-1"><?= count($rec['present']) ?></span>
+                    </button>
+                    <?php endforeach; ?>
+                </div>
+            </div>
+            <?php endif; ?>
 
             <form method="POST" action="taketutatt.php">
                 <?php foreach ($data as $key => $value): ?>
@@ -219,6 +295,21 @@ $total_students = $students_result->num_rows;
             card.classList.remove('bg-success-subtle', 'border-success');
         });
         updateCount();
+    });
+
+    // Autofill buttons
+    document.querySelectorAll('.autofill-btn').forEach(function (btn) {
+        btn.addEventListener('click', function () {
+            const presentSet = new Set(JSON.parse(this.dataset.present));
+            cards.forEach(function (card) {
+                const cb = card.querySelector('.attendance-checkbox');
+                if (presentSet.has(cb.value)) {
+                    cb.checked = true;
+                    card.classList.add('bg-success-subtle', 'border-success');
+                }
+            });
+            updateCount();
+        });
     });
 
     updateCount();
