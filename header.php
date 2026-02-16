@@ -4,6 +4,7 @@ if (!isset($_SESSION['Name'])) {
     // header("Location: index.php");
     // exit();
 }
+$header_enrollment_search = htmlspecialchars(trim((string)($_GET['enrollment'] ?? '')));
 ?>
 <header class="app-header fixed-top">
     <div class="app-header-inner">
@@ -22,8 +23,8 @@ if (!isset($_SESSION['Name'])) {
                     </div>
 
                     <div class="app-search-box col">
-                        <form class="app-search-form">
-                            <input type="text" placeholder="Search..." name="search" class="form-control search-input">
+                        <form class="app-search-form" method="GET" action="studentAttendance.php">
+                            <input type="text" placeholder="Search Enrollment No..." name="enrollment" value="<?= $header_enrollment_search; ?>" class="form-control search-input">
                             <button type="submit" class="btn search-btn btn-primary" value="Search"><i class="fa-solid fa-magnifying-glass"></i></button>
                         </form>
                     </div>
@@ -105,6 +106,13 @@ if (!isset($_SESSION['Name'])) {
                         <a class="nav-link" href="lecmuster.php">
                             <span class="nav-icon"><i class="bi bi-file-earmark-spreadsheet"></i></span>
                             <span class="nav-link-text">Muster Report</span>
+                        </a>
+                    </li>
+
+                    <li class="nav-item">
+                        <a class="nav-link" href="attendanceAnalysis.php">
+                            <span class="nav-icon"><i class="bi bi-bar-chart-line"></i></span>
+                            <span class="nav-link-text">Attendance Analysis</span>
                         </a>
                     </li>
 

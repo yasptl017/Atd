@@ -1,4 +1,4 @@
-﻿<?php
+<?php
 include('dbconfig.php');
 
 function short_name($full_name) {
