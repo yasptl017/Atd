@@ -72,6 +72,20 @@ $header_enrollment_search = htmlspecialchars(trim((string)($_GET['enrollment'] ?
                     </li>
 
                     <li class="nav-item">
+                        <a class="nav-link" href="myAttendance.php">
+                            <span class="nav-icon"><i class="bi bi-calendar2-check"></i></span>
+                            <span class="nav-link-text">My Attendance</span>
+                        </a>
+                    </li>
+
+                    <li class="nav-item">
+                        <a class="nav-link" href="addMapping.php">
+                            <span class="nav-icon"><i class="bi bi-calendar-week"></i></span>
+                            <span class="nav-link-text">Add Mapping</span>
+                        </a>
+                    </li>
+
+                    <li class="nav-item">
                         <a class="nav-link" href="lecAttendance.php">
                             <span class="nav-icon"><i class="bi bi-journal-text"></i></span>
                             <span class="nav-link-text">Lecture Attendance</span>

@@ -80,8 +80,8 @@ if ($lab_res) {
     }
 }
 
-// Tutorial records today — filter to students of this class
-$tut_res = $conn->query("SELECT id, subject, batch, presentNo FROM labattendance WHERE term='{$escaped_term}' AND sem='{$escaped_sem}' AND date='{$att_date_esc}' AND (labNo IS NULL OR labNo='') ORDER BY id DESC");
+// Tutorial records today — from tutattendance table
+$tut_res = $conn->query("SELECT id, subject, batch, presentNo FROM tutattendance WHERE term='{$escaped_term}' AND sem='{$escaped_sem}' AND date='{$att_date_esc}' ORDER BY id DESC");
 if ($tut_res) {
     while ($row = $tut_res->fetch_assoc()) {
         $all  = array_filter(array_map('trim', explode(',', (string)$row['presentNo'])));

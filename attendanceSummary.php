@@ -68,6 +68,9 @@ if (!in_array($type, $allowed_types, true) || $id <= 0) {
 if ($type === 'lecture') {
     $stmt = $conn->prepare("SELECT id, date, logdate, time, term, faculty, sem, subject, class, presentNo FROM lecattendance WHERE id = ?");
     $stmt->bind_param('i', $id);
+} elseif ($type === 'tutorial') {
+    $stmt = $conn->prepare("SELECT id, date, CURDATE() AS logdate, time, term, faculty, sem, subject, batch, '' AS labNo, presentNo, '' AS totalPcUsed FROM tutattendance WHERE id = ?");
+    $stmt->bind_param('i', $id);
 } else {
     $stmt = $conn->prepare("SELECT id, date, logdate, time, term, faculty, sem, subject, batch, labNo, presentNo, totalPcUsed FROM labattendance WHERE id = ?");
     $stmt->bind_param('i', $id);

@@ -14,8 +14,8 @@ if ($id <= 0) {
     exit();
 }
 
-// Fetch the record (tutorial: stored in labattendance with empty labNo)
-$stmt = $conn->prepare("SELECT id, date, time, term, faculty, sem, subject, batch, presentNo FROM labattendance WHERE id = ?");
+// Fetch the record from dedicated tutattendance table
+$stmt = $conn->prepare("SELECT id, date, time, term, faculty, sem, subject, batch, presentNo FROM tutattendance WHERE id = ?");
 $stmt->bind_param('i', $id);
 $stmt->execute();
 $record = $stmt->get_result()->fetch_assoc();
@@ -38,7 +38,7 @@ $batches_normalized   = array_values(array_unique(array_map('strtoupper', $selec
 // Handle update
 if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['update_attendance'])) {
     $new_present = isset($_POST['present']) ? implode(',', $_POST['present']) : '';
-    $stmt = $conn->prepare("UPDATE labattendance SET presentNo = ? WHERE id = ?");
+    $stmt = $conn->prepare("UPDATE tutattendance SET presentNo = ? WHERE id = ?");
     $stmt->bind_param('si', $new_present, $id);
     if ($stmt->execute()) {
         $record['presentNo'] = $new_present;

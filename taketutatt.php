@@ -1,6 +1,21 @@
 <?php
 include('dbconfig.php');
 
+// ── Auto-create tutattendance table if missing ────────────────────────────────
+$conn->query("CREATE TABLE IF NOT EXISTS `tutattendance` (
+    `id`        INT          NOT NULL AUTO_INCREMENT,
+    `date`      DATE         NOT NULL,
+    `logdate`   DATE         NOT NULL,
+    `time`      VARCHAR(50)  NOT NULL,
+    `term`      VARCHAR(20)  NOT NULL,
+    `faculty`   VARCHAR(50)  NOT NULL,
+    `sem`       VARCHAR(10)  NOT NULL,
+    `subject`   VARCHAR(100) NOT NULL,
+    `batch`     VARCHAR(100) NOT NULL COMMENT 'comma-separated tutorial batch names',
+    `presentNo` TEXT         NOT NULL COMMENT 'comma-separated enrollment numbers',
+    PRIMARY KEY (`id`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4");
+
 function short_name($full_name) {
     $full_name = trim((string)$full_name);
     if ($full_name === '') {
@@ -63,18 +78,16 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['submit_attendance']))
     $subject = $_POST['subject'];
     $submitted_batches = normalize_batch_values($_POST['tutBatch'] ?? ($_POST['batch'] ?? []));
     $batch = implode(',', $submitted_batches);
-    $labNo = '';
     $present = isset($_POST['present']) ? implode(',', $_POST['present']) : '';
 
     if (empty($submitted_batches)) {
         $attendance_error = 'Please select at least one tutorial batch.';
     } else {
-        $totalPcUsedValue = '';
-        $stmt = $conn->prepare("INSERT INTO labattendance (date, logdate, time, term, faculty, sem, subject, batch, labNo, presentNo, totalPcUsed) VALUES (?, CURDATE(), ?, ?, ?, ?, ?, ?, ?, ?, ?)");
-        $stmt->bind_param('ssssssssss', $date, $time, $term, $faculty, $sem, $subject, $batch, $labNo, $present, $totalPcUsedValue);
+        $stmt = $conn->prepare("INSERT INTO tutattendance (date, logdate, time, term, faculty, sem, subject, batch, presentNo) VALUES (?, CURDATE(), ?, ?, ?, ?, ?, ?, ?)");
+        $stmt->bind_param('ssssssss', $date, $time, $term, $faculty, $sem, $subject, $batch, $present);
         $stmt->execute();
-
         $attendance_id = (int)$conn->insert_id;
+        $stmt->close();
         header('Location: attendanceSummary.php?type=tutorial&id=' . $attendance_id);
         exit();
     }
@@ -139,8 +152,8 @@ if (!empty($tut_enrollments)) {
         }
     }
 
-    // Other tutorial records today — filter to students in selected tutorial batches
-    $tut_res2 = $conn->query("SELECT id, subject, batch, presentNo FROM labattendance WHERE term='{$escaped_term}' AND sem='{$escaped_sem}' AND date='{$att_date_esc}' AND (labNo IS NULL OR labNo='') ORDER BY id DESC");
+    // Other tutorial records today — from tutattendance table
+    $tut_res2 = $conn->query("SELECT id, subject, batch, presentNo FROM tutattendance WHERE term='{$escaped_term}' AND sem='{$escaped_sem}' AND date='{$att_date_esc}' ORDER BY id DESC");
     if ($tut_res2) {
         while ($row = $tut_res2->fetch_assoc()) {
             $all  = array_filter(array_map('trim', explode(',', (string)$row['presentNo'])));

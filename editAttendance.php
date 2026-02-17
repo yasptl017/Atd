@@ -33,16 +33,30 @@ if ($type === 'lecture') {
     $stmt->execute();
     $records = $stmt->get_result();
     $stmt->close();
-} else {
-    // lab and tutorial both stored in labattendance
+} elseif ($type === 'tutorial') {
+    // Tutorial uses its own tutattendance table
     $where  = ['1=1'];
     $params = [];
     $types  = '';
-    if ($type === 'tutorial') {
-        $where[] = "(labNo = '' OR labNo IS NULL)";
-    } else {
-        $where[] = "labNo IS NOT NULL AND labNo != ''";
+    if ($filter_term !== '')    { $where[] = 'term = ?';    $params[] = $filter_term;    $types .= 's'; }
+    if ($filter_sem !== '')     { $where[] = 'sem = ?';     $params[] = $filter_sem;     $types .= 's'; }
+    if ($filter_subject !== '') { $where[] = 'subject = ?'; $params[] = $filter_subject; $types .= 's'; }
+    if ($filter_date !== '')    { $where[] = 'date = ?';    $params[] = $filter_date;    $types .= 's'; }
+    if ($filter_faculty !== '') { $where[] = 'faculty = ?'; $params[] = $filter_faculty; $types .= 's'; }
+
+    $sql  = "SELECT id, date, time, term, faculty, sem, subject, batch, presentNo FROM tutattendance WHERE " . implode(' AND ', $where) . " ORDER BY date DESC, id DESC";
+    $stmt = $conn->prepare($sql);
+    if (!empty($params)) {
+        $stmt->bind_param($types, ...$params);
     }
+    $stmt->execute();
+    $records = $stmt->get_result();
+    $stmt->close();
+} else {
+    // lab uses labattendance (with labNo present)
+    $where  = ['1=1', "labNo IS NOT NULL AND labNo != ''"];
+    $params = [];
+    $types  = '';
     if ($filter_term !== '')    { $where[] = 'term = ?';    $params[] = $filter_term;    $types .= 's'; }
     if ($filter_sem !== '')     { $where[] = 'sem = ?';     $params[] = $filter_sem;     $types .= 's'; }
     if ($filter_subject !== '') { $where[] = 'subject = ?'; $params[] = $filter_subject; $types .= 's'; }

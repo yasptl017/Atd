@@ -38,7 +38,12 @@ $default_date = date('Y-m-d');
 <div class="app-wrapper">
     <div class="app-content pt-3 p-md-3 p-lg-4">
         <div class="container-xl">
-            <h1 class="app-page-title"><i class="bi bi-camera-video me-2"></i>Lab Attendance</h1>
+            <div class="d-flex justify-content-between align-items-center flex-wrap gap-2 mb-3">
+                <h1 class="app-page-title mb-0"><i class="bi bi-camera-video me-2"></i>Lab Attendance</h1>
+                <a href="addLabMapping.php" class="btn btn-outline-primary btn-sm">
+                    <i class="bi bi-calendar-plus me-1"></i>Add / Manage Lab Mapping
+                </a>
+            </div>
 
             <div class="row mb-4">
                 <div class="col-12">
