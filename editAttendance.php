@@ -1,18 +1,61 @@
 <?php
 include('dbconfig.php');
 
-$type    = strtolower(trim((string)($_GET['type'] ?? 'lecture')));
+$type    = strtolower(trim((string)($_REQUEST['type'] ?? 'lecture')));
 $allowed = ['lecture', 'lab', 'tutorial'];
 if (!in_array($type, $allowed, true)) {
     $type = 'lecture';
 }
 
 // Filters
-$filter_term    = trim((string)($_GET['term'] ?? ''));
-$filter_sem     = trim((string)($_GET['sem'] ?? ''));
-$filter_subject = trim((string)($_GET['subject'] ?? ''));
-$filter_date    = trim((string)($_GET['date'] ?? ''));
-$filter_faculty = trim((string)($_GET['faculty'] ?? ''));
+$filter_term    = trim((string)($_REQUEST['term'] ?? ''));
+$filter_sem     = trim((string)($_REQUEST['sem'] ?? ''));
+$filter_subject = trim((string)($_REQUEST['subject'] ?? ''));
+$filter_date    = trim((string)($_REQUEST['date'] ?? ''));
+$filter_faculty = trim((string)($_REQUEST['faculty'] ?? ''));
+
+$success_msg = trim((string)($_GET['success'] ?? ''));
+$error_msg   = trim((string)($_GET['error'] ?? ''));
+
+if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['delete_attendance'])) {
+    $delete_id   = (int)($_POST['delete_id'] ?? 0);
+    $delete_type = strtolower(trim((string)($_POST['delete_type'] ?? $type)));
+    $table_map   = [
+        'lecture'  => 'lecattendance',
+        'lab'      => 'labattendance',
+        'tutorial' => 'tutattendance',
+    ];
+
+    $redirect_params = [
+        'type'    => $delete_type,
+        'term'    => $filter_term,
+        'sem'     => $filter_sem,
+        'subject' => $filter_subject,
+        'date'    => $filter_date,
+        'faculty' => $filter_faculty,
+    ];
+
+    if (!isset($table_map[$delete_type]) || $delete_id <= 0) {
+        $redirect_params['error'] = 'Invalid attendance record.';
+        header('Location: editAttendance.php?' . http_build_query($redirect_params));
+        exit();
+    }
+
+    $table = $table_map[$delete_type];
+    $stmt  = $conn->prepare("DELETE FROM {$table} WHERE id = ?");
+    $stmt->bind_param('i', $delete_id);
+    $ok = $stmt->execute();
+    $affected = $stmt->affected_rows;
+    $stmt->close();
+
+    if ($ok && $affected > 0) {
+        $redirect_params['success'] = 'Attendance record deleted successfully.';
+    } else {
+        $redirect_params['error'] = 'Failed to delete attendance record.';
+    }
+    header('Location: editAttendance.php?' . http_build_query($redirect_params));
+    exit();
+}
 
 // Build query
 if ($type === 'lecture') {
@@ -92,6 +135,13 @@ $edit_page = ['lecture' => 'editlecatt.php', 'lab' => 'editlabatt.php', 'tutoria
     <div class="app-content pt-3 p-md-3 p-lg-4">
         <div class="container-xl">
             <h1 class="app-page-title"><i class="bi bi-pencil-square me-2"></i>Edit Attendance</h1>
+
+            <?php if ($success_msg !== ''): ?>
+                <div class="alert alert-success"><?= htmlspecialchars($success_msg) ?></div>
+            <?php endif; ?>
+            <?php if ($error_msg !== ''): ?>
+                <div class="alert alert-danger"><?= htmlspecialchars($error_msg) ?></div>
+            <?php endif; ?>
 
             <!-- Type Tabs -->
             <ul class="nav nav-tabs mb-3">
@@ -194,9 +244,25 @@ $edit_page = ['lecture' => 'editlecatt.php', 'lab' => 'editlabatt.php', 'tutoria
                                             <?php endif; ?>
                                             <td><span class="badge bg-success"><?= $present_cnt ?></span></td>
                                             <td>
-                                                <a href="<?= $edit_page[$type] ?>?id=<?= (int)$row['id'] ?>" class="btn btn-sm btn-outline-primary">
-                                                    <i class="bi bi-pencil me-1"></i>Edit
-                                                </a>
+                                                <div class="d-flex gap-1">
+                                                    <a href="<?= $edit_page[$type] ?>?id=<?= (int)$row['id'] ?>" class="btn btn-sm btn-outline-primary">
+                                                        <i class="bi bi-pencil me-1"></i>Edit
+                                                    </a>
+                                                    <form method="POST" action="editAttendance.php" class="d-inline" onsubmit="return confirm('Delete this attendance record? This cannot be undone.');">
+                                                        <input type="hidden" name="delete_attendance" value="1">
+                                                        <input type="hidden" name="delete_id" value="<?= (int)$row['id'] ?>">
+                                                        <input type="hidden" name="delete_type" value="<?= htmlspecialchars($type) ?>">
+                                                        <input type="hidden" name="type" value="<?= htmlspecialchars($type) ?>">
+                                                        <input type="hidden" name="term" value="<?= htmlspecialchars($filter_term) ?>">
+                                                        <input type="hidden" name="sem" value="<?= htmlspecialchars($filter_sem) ?>">
+                                                        <input type="hidden" name="subject" value="<?= htmlspecialchars($filter_subject) ?>">
+                                                        <input type="hidden" name="date" value="<?= htmlspecialchars($filter_date) ?>">
+                                                        <input type="hidden" name="faculty" value="<?= htmlspecialchars($filter_faculty) ?>">
+                                                        <button type="submit" class="btn btn-sm btn-outline-danger">
+                                                            <i class="bi bi-trash me-1"></i>Delete
+                                                        </button>
+                                                    </form>
+                                                </div>
                                             </td>
                                         </tr>
                                     <?php endwhile; ?>

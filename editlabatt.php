@@ -53,6 +53,21 @@ if (!$record) {
 $success_msg = '';
 $error_msg   = '';
 
+if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['delete_attendance'])) {
+    $stmt = $conn->prepare("DELETE FROM labattendance WHERE id = ?");
+    $stmt->bind_param('i', $id);
+    $ok = $stmt->execute();
+    $affected = $stmt->affected_rows;
+    $stmt->close();
+
+    if ($ok && $affected > 0) {
+        header('Location: editAttendance.php?type=lab&success=' . urlencode('Attendance record deleted successfully.'));
+    } else {
+        header('Location: editAttendance.php?type=lab&error=' . urlencode('Failed to delete attendance record.'));
+    }
+    exit();
+}
+
 // Parse existing data
 $selected_batches = array_filter(array_map('trim', explode(',', (string)$record['batch'])));
 $selected_batches = array_values(array_unique($selected_batches));
@@ -250,6 +265,9 @@ if (!$students_result) {
                             <div class="mt-3 d-flex align-items-center gap-2 flex-wrap">
                                 <button type="submit" name="update_attendance" class="btn btn-primary px-4">
                                     <i class="bi bi-floppy me-1"></i>Save Changes
+                                </button>
+                                <button type="submit" name="delete_attendance" class="btn btn-outline-danger" formnovalidate onclick="return confirm('Delete this attendance record? This cannot be undone.');">
+                                    <i class="bi bi-trash me-1"></i>Delete Attendance
                                 </button>
                                 <span class="text-muted" id="present-count" style="font-size:0.875rem;"></span>
                             </div>

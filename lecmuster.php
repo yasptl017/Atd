@@ -198,6 +198,7 @@ function write_muster_sheet($sheet, $students, $sessions, $term, $sem, $batch, $
     $sheet->getStyle("A1")->getFont()->setBold(true)->setSize(14);
     $sheet->getStyle("A2")->getFont()->setBold(true)->setSize(12);
     $sheet->getStyle("A3:{$lastCol}5")->getFont()->setBold(true);
+    $sheet->getStyle("A1:{$lastCol}5")->getBorders()->getAllBorders()->setBorderStyle(Border::BORDER_THIN);
 
     $sheet->getStyle("A{$headerRow}:{$lastCol}{$headerRow}")->getFont()->setBold(true);
     $sheet->getStyle("A{$headerRow}:{$lastCol}{$headerRow}")->getFill()->setFillType(Fill::FILL_SOLID)->getStartColor()->setRGB('DCE6F1');
