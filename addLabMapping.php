@@ -219,6 +219,16 @@ $day_names = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
     .app-content {
         padding-top: 0 !important;
     }
+    .app-content .container-xl {
+        max-width: 100% !important;
+        padding-left: 0 !important;
+        padding-right: 0 !important;
+    }
+    .app-content .row.g-4 > .col-12.col-lg-5,
+    .app-content .row.g-4 > .col-12.col-lg-7 {
+        flex: 0 0 100% !important;
+        max-width: 100% !important;
+    }
 </style>
 <?php endif; ?>
 <body class="app">

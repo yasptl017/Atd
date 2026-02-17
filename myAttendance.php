@@ -327,8 +327,8 @@ $day_names = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
 
             <div class="d-flex justify-content-between align-items-center flex-wrap gap-2 mb-3">
                 <h1 class="app-page-title mb-0"><i class="bi bi-calendar2-check me-2"></i>My Attendance</h1>
-                <a href="addMapping.php" class="btn btn-outline-primary btn-sm">
-                    <i class="bi bi-plus-circle me-1"></i>Add / Manage Mappings
+                <a href="addMapping.php" class="btn btn-sm mapping-cta-btn">
+                    Add / Manage Mappings
                 </a>
             </div>
 
@@ -510,6 +510,27 @@ $day_names = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
 .sticky-top {
     top: 0;
     z-index: 1;
+}
+.mapping-cta-btn {
+    color: #fff;
+    border: 0;
+    border-radius: 0.4rem;
+    background: linear-gradient(135deg, #1f7a8c, #2a9d8f);
+    box-shadow: 0 10px 24px rgba(31, 122, 140, 0.22);
+    font-weight: 600;
+    letter-spacing: 0.2px;
+    padding: 0.45rem 1rem;
+    transition: transform 0.18s ease, box-shadow 0.18s ease, filter 0.18s ease;
+}
+.mapping-cta-btn:hover,
+.mapping-cta-btn:focus {
+    color: #fff;
+    transform: translateY(-1px);
+    box-shadow: 0 14px 28px rgba(31, 122, 140, 0.28);
+    filter: saturate(1.05);
+}
+.mapping-cta-btn:active {
+    transform: translateY(0);
 }
 </style>
 

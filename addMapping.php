@@ -34,7 +34,9 @@ if ($edit_id > 0) {
         <div class="container-xl">
             <div class="d-flex justify-content-between align-items-center flex-wrap gap-2 mb-3">
                 <h1 class="app-page-title mb-0"><i class="bi bi-diagram-3 me-2"></i>Add Mapping</h1>
-                <a href="<?= htmlspecialchars($open_page_src) ?>" class="btn btn-outline-secondary btn-sm">Open Active Tab Full Page</a>
+                <a href="<?= htmlspecialchars($open_page_src) ?>" class="btn btn-sm open-fullpage-btn">
+                    Open Active Tab Full Page
+                </a>
             </div>
 
             <ul class="nav nav-tabs mb-3">
@@ -62,6 +64,30 @@ if ($edit_id > 0) {
         </div>
     </div>
 </div>
+
+<style>
+.open-fullpage-btn {
+    color: #0c4a6e;
+    border: 1px solid #b9d4f7;
+    border-radius: 0.4rem;
+    background: linear-gradient(135deg, #ffffff, #e8f3ff);
+    box-shadow: 0 6px 16px rgba(12, 74, 110, 0.12);
+    font-weight: 600;
+    letter-spacing: 0.2px;
+    padding: 0.45rem 1rem;
+    transition: transform 0.18s ease, box-shadow 0.18s ease, border-color 0.18s ease;
+}
+.open-fullpage-btn:hover,
+.open-fullpage-btn:focus {
+    color: #0a3d5c;
+    border-color: #8ab8f3;
+    transform: translateY(-1px);
+    box-shadow: 0 10px 20px rgba(12, 74, 110, 0.18);
+}
+.open-fullpage-btn:active {
+    transform: translateY(0);
+}
+</style>
 
 <script>
     const frame = document.getElementById('mapping-frame');
