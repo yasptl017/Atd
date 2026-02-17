@@ -42,8 +42,8 @@ $error_msg = '';
 if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['delete_mapping'])) {
     $del_id = (int)($_POST['delete_id'] ?? 0);
     if ($del_id > 0) {
-        $stmt = $conn->prepare("DELETE FROM lecmapping WHERE id = ?");
-        $stmt->bind_param('i', $del_id);
+        $stmt = $conn->prepare("DELETE FROM lecmapping WHERE id = ? AND faculty = ?");
+        $stmt->bind_param('is', $del_id, $logged_faculty_id);
         $stmt->execute();
         $stmt->close();
         $success_msg = 'Lecture mapping deleted.';
@@ -115,8 +115,8 @@ $form_defaults = [
 $form_values = $form_defaults;
 
 if ($edit_id > 0) {
-    $stmt = $conn->prepare("SELECT * FROM lecmapping WHERE id = ?");
-    $stmt->bind_param('i', $edit_id);
+    $stmt = $conn->prepare("SELECT * FROM lecmapping WHERE id = ? AND faculty = ?");
+    $stmt->bind_param('is', $edit_id, $logged_faculty_id);
     $stmt->execute();
     $row = $stmt->get_result()->fetch_assoc();
     $stmt->close();
@@ -173,8 +173,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['save_mapping'])) {
     } else {
         $repeat_days_csv = implode(',', $repeat_days);
         if ($mapping_id > 0) {
-            $stmt = $conn->prepare("UPDATE lecmapping SET faculty = ?, term = ?, sem = ?, subject = ?, class = ?, slot = ?, start_date = ?, end_date = ?, repeat_days = ? WHERE id = ?");
-            $stmt->bind_param('sssssssssi', $faculty, $term, $sem, $subject, $class, $slot, $start_date, $end_date, $repeat_days_csv, $mapping_id);
+            $stmt = $conn->prepare("UPDATE lecmapping SET faculty = ?, term = ?, sem = ?, subject = ?, class = ?, slot = ?, start_date = ?, end_date = ?, repeat_days = ? WHERE id = ? AND faculty = ?");
+            $stmt->bind_param('sssssssssis', $faculty, $term, $sem, $subject, $class, $slot, $start_date, $end_date, $repeat_days_csv, $mapping_id, $logged_faculty_id);
             if ($stmt->execute()) {
                 $success_msg = 'Lecture mapping updated successfully.';
             } else {
@@ -203,7 +203,11 @@ if ($is_edit_mode) {
 }
 
 $mappings = [];
-$res = $conn->query("SELECT m.*, f.Name AS faculty_name FROM lecmapping m LEFT JOIN faculty f ON f.id = m.faculty ORDER BY m.start_date DESC, m.id DESC");
+$res_stmt = $conn->prepare("SELECT m.*, f.Name AS faculty_name FROM lecmapping m LEFT JOIN faculty f ON f.id = m.faculty WHERE m.faculty = ? ORDER BY m.start_date DESC, m.id DESC");
+$res_stmt->bind_param('s', $logged_faculty_id);
+$res_stmt->execute();
+$res = $res_stmt->get_result();
+$res_stmt->close();
 if ($res) {
     while ($row = $res->fetch_assoc()) {
         $mappings[] = $row;

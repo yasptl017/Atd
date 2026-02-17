@@ -30,8 +30,8 @@ $error_msg = '';
 if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['delete_mapping'])) {
     $del_id = (int)($_POST['delete_id'] ?? 0);
     if ($del_id > 0) {
-        $stmt = $conn->prepare("DELETE FROM tutmapping WHERE id = ?");
-        $stmt->bind_param('i', $del_id);
+        $stmt = $conn->prepare("DELETE FROM tutmapping WHERE id = ? AND faculty = ?");
+        $stmt->bind_param('is', $del_id, $logged_faculty_id);
         $stmt->execute();
         $stmt->close();
         $success_msg = 'Tutorial mapping deleted.';
@@ -72,8 +72,8 @@ $logged_faculty_id = $fac_row ? (string)$fac_row['id'] : '';
 // Load selected mapping for edit mode
 $editing_mapping = null;
 if ($edit_id > 0) {
-    $edit_stmt = $conn->prepare("SELECT * FROM tutmapping WHERE id = ?");
-    $edit_stmt->bind_param('i', $edit_id);
+    $edit_stmt = $conn->prepare("SELECT * FROM tutmapping WHERE id = ? AND faculty = ?");
+    $edit_stmt->bind_param('is', $edit_id, $logged_faculty_id);
     $edit_stmt->execute();
     $editing_mapping = $edit_stmt->get_result()->fetch_assoc();
     $edit_stmt->close();
@@ -150,8 +150,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['save_mapping'])) {
         $repeat_days_csv = implode(',', $repeat_days);
 
         if ($mapping_id > 0) {
-            $check_stmt = $conn->prepare("SELECT id FROM tutmapping WHERE id = ?");
-            $check_stmt->bind_param('i', $mapping_id);
+            $check_stmt = $conn->prepare("SELECT id FROM tutmapping WHERE id = ? AND faculty = ?");
+            $check_stmt->bind_param('is', $mapping_id, $logged_faculty_id);
             $check_stmt->execute();
             $mapping_exists = (bool)$check_stmt->get_result()->fetch_assoc();
             $check_stmt->close();
@@ -159,8 +159,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['save_mapping'])) {
             if (!$mapping_exists) {
                 $error_msg = 'Mapping not found for update.';
             } else {
-                $stmt = $conn->prepare("UPDATE tutmapping SET faculty = ?, term = ?, sem = ?, subject = ?, tutBatch = ?, slot = ?, start_date = ?, end_date = ?, repeat_days = ? WHERE id = ?");
-                $stmt->bind_param('sssssssssi', $faculty, $term, $sem, $subject, $tutBatch, $slot, $start_date, $end_date, $repeat_days_csv, $mapping_id);
+                $stmt = $conn->prepare("UPDATE tutmapping SET faculty = ?, term = ?, sem = ?, subject = ?, tutBatch = ?, slot = ?, start_date = ?, end_date = ?, repeat_days = ? WHERE id = ? AND faculty = ?");
+                $stmt->bind_param('sssssssssis', $faculty, $term, $sem, $subject, $tutBatch, $slot, $start_date, $end_date, $repeat_days_csv, $mapping_id, $logged_faculty_id);
                 if ($stmt->execute()) {
                     $success_msg = 'Tutorial mapping updated successfully.';
                     $edit_id = $mapping_id;
@@ -189,7 +189,11 @@ if ($is_edit_mode) {
     $form_action .= ($is_embedded ? '&' : '?') . 'edit_id=' . $edit_id;
 }
 
-$mappings_result = $conn->query("SELECT m.*, f.Name AS faculty_name FROM tutmapping m LEFT JOIN faculty f ON f.id = m.faculty ORDER BY m.start_date DESC, m.id DESC");
+$mappings_stmt = $conn->prepare("SELECT m.*, f.Name AS faculty_name FROM tutmapping m LEFT JOIN faculty f ON f.id = m.faculty WHERE m.faculty = ? ORDER BY m.start_date DESC, m.id DESC");
+$mappings_stmt->bind_param('s', $logged_faculty_id);
+$mappings_stmt->execute();
+$mappings_result = $mappings_stmt->get_result();
+$mappings_stmt->close();
 $day_names = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
 ?>
 <!DOCTYPE html>

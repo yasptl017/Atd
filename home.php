@@ -27,33 +27,33 @@ require_login();
                 <div class="col-6 col-lg-3">
                     <div class="app-card app-card-stat shadow-sm h-100 text-center" style="cursor:pointer;">
                         <div class="app-card-body p-3 p-md-4">
-                            <div class="stats-icon mb-2" style="font-size:2.25rem;">📚</div>
-                            <h4 class="stats-type mb-0">Lecture Attendance</h4>
-                            <p class="text-muted mb-0 mt-1" style="font-size:0.78rem;">Mark &amp; record</p>
+                            <div class="stats-icon mb-2" style="font-size:2.25rem;"><i class="bi bi-calendar2-check text-primary"></i></div>
+                            <h4 class="stats-type mb-0">My Attendance</h4>
+                            <p class="text-muted mb-0 mt-1" style="font-size:0.78rem;">View &amp; take attendance</p>
                         </div>
-                        <a class="app-card-link-mask" href="lecAttendance.php"></a>
+                        <a class="app-card-link-mask" href="myAttendance.php"></a>
                     </div>
                 </div>
 
                 <div class="col-6 col-lg-3">
                     <div class="app-card app-card-stat shadow-sm h-100 text-center" style="cursor:pointer;">
                         <div class="app-card-body p-3 p-md-4">
-                            <div class="stats-icon mb-2" style="font-size:2.25rem;">🧪</div>
-                            <h4 class="stats-type mb-0">Lab Attendance</h4>
-                            <p class="text-muted mb-0 mt-1" style="font-size:0.78rem;">Mark &amp; record</p>
+                            <div class="stats-icon mb-2" style="font-size:2.25rem;"><i class="bi bi-pencil-square text-warning"></i></div>
+                            <h4 class="stats-type mb-0">Edit Attendance</h4>
+                            <p class="text-muted mb-0 mt-1" style="font-size:0.78rem;">Update marked records</p>
                         </div>
-                        <a class="app-card-link-mask" href="labAttendance.php"></a>
+                        <a class="app-card-link-mask" href="editAttendance.php"></a>
                     </div>
                 </div>
 
                 <div class="col-6 col-lg-3">
                     <div class="app-card app-card-stat shadow-sm h-100 text-center" style="cursor:pointer;">
                         <div class="app-card-body p-3 p-md-4">
-                            <div class="stats-icon mb-2" style="font-size:2.25rem;">📖</div>
-                            <h4 class="stats-type mb-0">Tutorial Attendance</h4>
-                            <p class="text-muted mb-0 mt-1" style="font-size:0.78rem;">Mark &amp; record</p>
+                            <div class="stats-icon mb-2" style="font-size:2.25rem;"><i class="bi bi-calendar-week text-success"></i></div>
+                            <h4 class="stats-type mb-0">Add Mapping</h4>
+                            <p class="text-muted mb-0 mt-1" style="font-size:0.78rem;">Schedule lectures &amp; labs</p>
                         </div>
-                        <a class="app-card-link-mask" href="tutAttendance.php"></a>
+                        <a class="app-card-link-mask" href="addMapping.php"></a>
                     </div>
                 </div>
 
