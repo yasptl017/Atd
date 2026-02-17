@@ -821,7 +821,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && strtolower(trim((string)($_POST['re
                                 <div class="row">
                                     <div class="col-12 col-md-6">
                                         <button type="submit" class="btn btn-primary w-100">
-                                            <i class="bi bi-download me-1"></i>Generate &amp; Download Excel
+                                            Generate &amp; Download Excel
                                         </button>
                                     </div>
                                 </div>
@@ -878,7 +878,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && strtolower(trim((string)($_POST['re
                                 <div class="row">
                                     <div class="col-12 col-md-4">
                                         <button type="submit" class="btn btn-success w-100">
-                                            <i class="bi bi-file-earmark-spreadsheet me-1"></i>Generate Lab Utilization
+                                            Generate Lab Utilization
                                         </button>
                                     </div>
                                 </div>

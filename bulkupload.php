@@ -102,7 +102,7 @@ if (isset($_POST['upload_csv'])) {
                             <p class="text-muted" style="font-size:0.875rem;">Columns must be in this exact order (with header row):</p>
                             <?php if (file_exists(__DIR__ . '/upload.csv')): ?>
                                 <a href="upload.csv" class="btn btn-sm btn-outline-primary mb-2" download>
-                                    <i class="bi bi-download me-1"></i>Download Sample CSV
+                                    Download Sample CSV
                                 </a>
                             <?php endif; ?>
                             <div class="table-responsive">

@@ -27,6 +27,9 @@ $fac_row = $fac_id_stmt->get_result()->fetch_assoc();
 $fac_id_stmt->close();
 $logged_faculty_id = $fac_row ? (string)$fac_row['id'] : '0';
 
+$success_msg = trim((string)($_GET['msg'] ?? ''));
+$error_msg = trim((string)($_GET['err'] ?? ''));
+
 // ── Filters from GET ──────────────────────────────────────────────────────────
 $filter_status  = $_GET['status']  ?? 'all';   // all | filled | unfilled
 $filter_mapping = (int)($_GET['mapping'] ?? 0); // specific mapping id, 0 = all
@@ -104,6 +107,193 @@ foreach ($slot_list as &$slot) {
 }
 unset($slot);
 
+$bulk_candidates = array_values(array_filter($slot_list, fn($s) => !$s['filled']));
+
+if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['autofill_pending_max'])) {
+    $redirect_params = [
+        'status' => $filter_status,
+        'mapping' => $filter_mapping,
+    ];
+
+    if (empty($bulk_candidates)) {
+        $redirect_params['err'] = 'No pending lecture slots found for autofill.';
+        header('Location: myAttendance.php?' . http_build_query($redirect_params));
+        exit();
+    }
+
+    $class_students_stmt = $conn->prepare("SELECT enrollmentNo FROM students WHERE term = ? AND sem = ? AND class = ? AND enrollmentNo IS NOT NULL AND TRIM(enrollmentNo) <> ''");
+    $lec_auto_stmt = $conn->prepare("SELECT presentNo FROM lecattendance WHERE term = ? AND sem = ? AND class = ? AND date = ?");
+    $lab_auto_stmt = $conn->prepare("SELECT presentNo FROM labattendance WHERE term = ? AND sem = ? AND date = ? AND COALESCE(TRIM(labNo), '') <> ''");
+    $tut_auto_stmt = $conn->prepare("SELECT presentNo FROM tutattendance WHERE term = ? AND sem = ? AND date = ?");
+    $exists_stmt = $conn->prepare("SELECT id FROM lecattendance WHERE date = ? AND time = ? AND term = ? AND sem = ? AND subject = ? AND class = ? LIMIT 1");
+    $insert_stmt = $conn->prepare("INSERT INTO lecattendance (date, logdate, time, term, faculty, sem, subject, class, presentNo) VALUES (?, CURDATE(), ?, ?, ?, ?, ?, ?, ?)");
+
+    if (!$class_students_stmt || !$lec_auto_stmt || !$lab_auto_stmt || !$tut_auto_stmt || !$exists_stmt || !$insert_stmt) {
+        $redirect_params['err'] = 'Bulk autofill is unavailable right now. Please try again.';
+        header('Location: myAttendance.php?' . http_build_query($redirect_params));
+        exit();
+    }
+
+    $parse_present_tokens = static function (string $csv): array {
+        $tokens = [];
+        foreach (explode(',', $csv) as $raw) {
+            $token = trim($raw);
+            if ($token !== '') {
+                $tokens[$token] = true;
+            }
+        }
+        return array_keys($tokens);
+    };
+
+    $class_cache = [];
+    $best_cache = [];
+    $processed_slot_keys = [];
+
+    $created = 0;
+    $autofilled = 0;
+    $skipped_no_autofill = 0;
+    $skipped_existing = 0;
+    $skipped_duplicate = 0;
+    $failed = 0;
+
+    foreach ($bulk_candidates as $slot) {
+        $slot_key = $slot['term'] . '|' . $slot['sem'] . '|' . $slot['subject'] . '|' . $slot['class'] . '|' . $slot['date'] . '|' . $slot['slot'];
+        if (isset($processed_slot_keys[$slot_key])) {
+            $skipped_duplicate++;
+            continue;
+        }
+        $processed_slot_keys[$slot_key] = true;
+
+        $date = (string)$slot['date'];
+        $time = (string)$slot['slot'];
+        $term = (string)$slot['term'];
+        $faculty = (string)$slot['faculty'];
+        $sem = (string)$slot['sem'];
+        $subject = (string)$slot['subject'];
+        $class = (string)$slot['class'];
+
+        $exists_stmt->bind_param('ssssss', $date, $time, $term, $sem, $subject, $class);
+        $exists_stmt->execute();
+        $existing_row = $exists_stmt->get_result()->fetch_assoc();
+        if ($existing_row) {
+            $skipped_existing++;
+            continue;
+        }
+
+        $class_key = $term . '|' . $sem . '|' . $class;
+        if (!isset($class_cache[$class_key])) {
+            $class_students_stmt->bind_param('sss', $term, $sem, $class);
+            $class_students_stmt->execute();
+            $student_res = $class_students_stmt->get_result();
+            $enrollment_set = [];
+            while ($sr = $student_res->fetch_assoc()) {
+                $enrollment = trim((string)($sr['enrollmentNo'] ?? ''));
+                if ($enrollment !== '') {
+                    $enrollment_set[$enrollment] = true;
+                }
+            }
+            $class_cache[$class_key] = $enrollment_set;
+        }
+
+        $best_key = $term . '|' . $sem . '|' . $class . '|' . $date;
+        if (!isset($best_cache[$best_key])) {
+            $class_set = $class_cache[$class_key];
+            $best_present = [];
+            $best_count = 0;
+
+            $consider_present = static function (string $csv, array $class_set, callable $parser): array {
+                $tokens = $parser($csv);
+                if (empty($tokens)) {
+                    return [];
+                }
+                $filtered = [];
+                foreach ($tokens as $token) {
+                    if (isset($class_set[$token])) {
+                        $filtered[$token] = true;
+                    }
+                }
+                return array_keys($filtered);
+            };
+
+            if (!empty($class_set)) {
+                $lec_auto_stmt->bind_param('ssss', $term, $sem, $class, $date);
+                $lec_auto_stmt->execute();
+                $lec_res = $lec_auto_stmt->get_result();
+                while ($row = $lec_res->fetch_assoc()) {
+                    $present = $consider_present((string)($row['presentNo'] ?? ''), $class_set, $parse_present_tokens);
+                    if (count($present) > $best_count) {
+                        $best_count = count($present);
+                        $best_present = $present;
+                    }
+                }
+
+                $lab_auto_stmt->bind_param('sss', $term, $sem, $date);
+                $lab_auto_stmt->execute();
+                $lab_res = $lab_auto_stmt->get_result();
+                while ($row = $lab_res->fetch_assoc()) {
+                    $present = $consider_present((string)($row['presentNo'] ?? ''), $class_set, $parse_present_tokens);
+                    if (count($present) > $best_count) {
+                        $best_count = count($present);
+                        $best_present = $present;
+                    }
+                }
+
+                $tut_auto_stmt->bind_param('sss', $term, $sem, $date);
+                $tut_auto_stmt->execute();
+                $tut_res = $tut_auto_stmt->get_result();
+                while ($row = $tut_res->fetch_assoc()) {
+                    $present = $consider_present((string)($row['presentNo'] ?? ''), $class_set, $parse_present_tokens);
+                    if (count($present) > $best_count) {
+                        $best_count = count($present);
+                        $best_present = $present;
+                    }
+                }
+            }
+
+            $best_cache[$best_key] = $best_present;
+        }
+
+        $present_list = $best_cache[$best_key];
+        if (empty($present_list)) {
+            $skipped_no_autofill++;
+            continue;
+        }
+
+        $present_csv = implode(',', $present_list);
+        $insert_stmt->bind_param('ssssssss', $date, $time, $term, $faculty, $sem, $subject, $class, $present_csv);
+        if ($insert_stmt->execute()) {
+            $created++;
+            $autofilled++;
+        } else {
+            $failed++;
+        }
+    }
+
+    $class_students_stmt->close();
+    $lec_auto_stmt->close();
+    $lab_auto_stmt->close();
+    $tut_auto_stmt->close();
+    $exists_stmt->close();
+    $insert_stmt->close();
+
+    if ($created === 0 && $failed === 0) {
+        $redirect_params['err'] = 'No pending slots were inserted. Existing entries may already be present or no autofill source had students.';
+    } else {
+        $summary = "Autofill complete: created {$created}, autofilled {$autofilled}, skipped no source {$skipped_no_autofill}, skipped existing {$skipped_existing}";
+        if ($skipped_duplicate > 0) {
+            $summary .= ", skipped duplicate {$skipped_duplicate}";
+        }
+        if ($failed > 0) {
+            $summary .= ", failed {$failed}";
+        }
+        $summary .= '.';
+        $redirect_params['msg'] = $summary;
+    }
+
+    header('Location: myAttendance.php?' . http_build_query($redirect_params));
+    exit();
+}
+
 // ── Apply status filter ───────────────────────────────────────────────────────
 if ($filter_status === 'filled') {
     $slot_list = array_values(array_filter($slot_list, fn($s) => $s['filled']));
@@ -141,6 +331,13 @@ $day_names = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
                     <i class="bi bi-plus-circle me-1"></i>Add / Manage Mappings
                 </a>
             </div>
+
+            <?php if ($success_msg !== ''): ?>
+                <div class="alert alert-success"><?= htmlspecialchars($success_msg) ?></div>
+            <?php endif; ?>
+            <?php if ($error_msg !== ''): ?>
+                <div class="alert alert-danger"><?= htmlspecialchars($error_msg) ?></div>
+            <?php endif; ?>
 
             <?php if (empty($mappings_rows)): ?>
                 <div class="alert alert-info">
@@ -188,10 +385,10 @@ $day_names = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
                                class="btn <?= $filter_status === 'all'      ? 'btn-secondary' : 'btn-outline-secondary' ?>">All</a>
                             <a href="?status=unfilled&mapping=<?= $filter_mapping ?>"
                                class="btn <?= $filter_status === 'unfilled' ? 'btn-danger'    : 'btn-outline-danger' ?>">
-                               <i class="bi bi-exclamation-circle me-1"></i>Pending</a>
+                               Pending</a>
                             <a href="?status=filled&mapping=<?= $filter_mapping ?>"
                                class="btn <?= $filter_status === 'filled'   ? 'btn-success'   : 'btn-outline-success' ?>">
-                               <i class="bi bi-check-circle me-1"></i>Filled</a>
+                               Filled</a>
                         </div>
 
                         <select name="mapping" class="form-select form-select-sm" style="max-width:260px;" onchange="this.form.submit()">
@@ -204,6 +401,15 @@ $day_names = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
                         </select>
                         <input type="hidden" name="status" value="<?= htmlspecialchars($filter_status) ?>">
                     </form>
+
+                    <?php if (!empty($bulk_candidates)): ?>
+                        <form method="POST" action="myAttendance.php?<?= htmlspecialchars(http_build_query(['status' => $filter_status, 'mapping' => $filter_mapping])) ?>" class="d-flex flex-wrap align-items-center gap-2 mt-2">
+                            <button type="submit" name="autofill_pending_max" class="btn btn-warning btn-sm" onclick="return confirm('Autofill all pending slots using maximum available attendance on each day? Slots without autofill source will be skipped.');">
+                                <i class="bi bi-magic me-1"></i>Autofill All Pending (Max by Day)
+                            </button>
+                        
+                        </form>
+                    <?php endif; ?>
                 </div>
             </div>
 
@@ -264,9 +470,9 @@ $day_names = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
                                     <td><?= htmlspecialchars($slot['slot']) ?></td>
                                     <td>
                                         <?php if ($slot['filled']): ?>
-                                            <span class="badge bg-success"><i class="bi bi-check-circle me-1"></i>Filled</span>
+                                            <span class="badge bg-success">Filled</span>
                                         <?php else: ?>
-                                            <span class="badge bg-danger"><i class="bi bi-exclamation-circle me-1"></i>Pending</span>
+                                            <span class="badge bg-danger">Pending</span>
                                         <?php endif; ?>
                                     </td>
                                     <td>
@@ -279,7 +485,7 @@ $day_names = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
                                             </a>
                                         <?php else: ?>
                                             <a href="<?= htmlspecialchars($take_url) ?>" class="btn btn-warning btn-sm">
-                                                <i class="bi bi-clipboard-check me-1"></i>Take Attendance
+                                                Take Attendance
                                             </a>
                                         <?php endif; ?>
                                     </td>

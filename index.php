@@ -254,7 +254,7 @@ $conn->close();
 
                     <?php if (isset($error_message)): ?>
                         <div class="alert alert-danger mt-3 mb-0" style="border-radius:0.5rem;font-size:0.875rem;">
-                            <i class="bi bi-exclamation-circle me-1"></i>
+                            
                             <?php echo htmlspecialchars($error_message); ?>
                         </div>
                     <?php endif; ?>

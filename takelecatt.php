@@ -153,7 +153,7 @@ if ($tut_res) {
                                 class="btn btn-outline-<?= $color ?> btn-sm autofill-btn"
                                 data-present="<?= htmlspecialchars(json_encode($rec['present'])) ?>"
                                 title="<?= htmlspecialchars($rec['label']) ?> (<?= count($rec['present']) ?> students from this class)">
-                            <i class="bi bi-clipboard-check me-1"></i>
+                            
                             <?= htmlspecialchars($rec['label']) ?>
                             <span class="badge bg-<?= $color ?> ms-1"><?= count($rec['present']) ?></span>
                         </button>
@@ -210,7 +210,7 @@ if ($tut_res) {
 
                             <div class="mt-3 d-flex align-items-center gap-2 flex-wrap">
                                 <button type="submit" name="submit_attendance" class="btn btn-success px-4">
-                                    <i class="bi bi-check-circle me-1"></i>Submit Attendance
+                                    Submit Attendance
                                 </button>
                                 <span class="text-muted" id="present-count" style="font-size:0.875rem;">0 marked present</span>
                             </div>

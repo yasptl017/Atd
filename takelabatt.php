@@ -277,7 +277,7 @@ if (!empty($batch_enrollments) && !empty($escaped_term)) {
                             class="btn btn-outline-<?= $color ?> btn-sm autofill-btn"
                             data-present="<?= htmlspecialchars(json_encode($rec['present'])) ?>"
                             title="<?= htmlspecialchars($rec['label']) ?> (<?= count($rec['present']) ?> students from these batches)">
-                        <i class="bi bi-clipboard-check me-1"></i>
+                        
                         <?= htmlspecialchars($rec['label']) ?>
                         <span class="badge bg-<?= $color ?> ms-1"><?= count($rec['present']) ?></span>
                     </button>

@@ -83,10 +83,10 @@ $total_students = $students_result->num_rows;
             </div>
 
             <?php if ($success_msg !== ''): ?>
-                <div class="alert alert-success"><i class="bi bi-check-circle me-1"></i><?= htmlspecialchars($success_msg) ?></div>
+                <div class="alert alert-success"><?= htmlspecialchars($success_msg) ?></div>
             <?php endif; ?>
             <?php if ($error_msg !== ''): ?>
-                <div class="alert alert-danger"><i class="bi bi-exclamation-circle me-1"></i><?= htmlspecialchars($error_msg) ?></div>
+                <div class="alert alert-danger"><?= htmlspecialchars($error_msg) ?></div>
             <?php endif; ?>
 
             <!-- Record Details -->
