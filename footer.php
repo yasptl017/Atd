@@ -13,4 +13,5 @@
     <script src="assets/js/index-charts.js"></script> 
     
     <!-- Page Specific JS -->
+    <script src="assets/js/pwa-install.js"></script> 
     <script src="assets/js/app.js"></script> 

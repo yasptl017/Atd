@@ -1,6 +1,27 @@
 <?php
 include('dbconfig.php');
 
+function lecture_column_exists(mysqli $conn, string $column): bool {
+    $stmt = $conn->prepare("SELECT 1 FROM information_schema.COLUMNS WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'lecattendance' AND COLUMN_NAME = ? LIMIT 1");
+    if (!$stmt) {
+        return false;
+    }
+    $stmt->bind_param('s', $column);
+    $stmt->execute();
+    $exists = $stmt->get_result()->num_rows > 0;
+    $stmt->close();
+    return $exists;
+}
+
+function ensure_lecture_attendance_columns(mysqli $conn): void {
+    if (!lecture_column_exists($conn, 'absentNo')) {
+        $conn->query("ALTER TABLE lecattendance ADD COLUMN absentNo TEXT NULL AFTER presentNo");
+    }
+    if (!lecture_column_exists($conn, 'description')) {
+        $conn->query("ALTER TABLE lecattendance ADD COLUMN description VARCHAR(255) NULL AFTER absentNo");
+    }
+}
+
 function short_name($full_name) {
     $full_name = trim((string)$full_name);
     if ($full_name === '') {
@@ -66,13 +87,14 @@ if (!in_array($type, $allowed_types, true) || $id <= 0) {
 }
 
 if ($type === 'lecture') {
-    $stmt = $conn->prepare("SELECT id, date, logdate, time, term, faculty, sem, subject, class, presentNo FROM lecattendance WHERE id = ?");
+    ensure_lecture_attendance_columns($conn);
+    $stmt = $conn->prepare("SELECT id, date, logdate, time, term, faculty, sem, subject, class, presentNo, COALESCE(absentNo, '') AS absentNo, COALESCE(description, '') AS description FROM lecattendance WHERE id = ?");
     $stmt->bind_param('i', $id);
 } elseif ($type === 'tutorial') {
-    $stmt = $conn->prepare("SELECT id, date, CURDATE() AS logdate, time, term, faculty, sem, subject, batch, '' AS labNo, presentNo, '' AS totalPcUsed FROM tutattendance WHERE id = ?");
+    $stmt = $conn->prepare("SELECT id, date, CURDATE() AS logdate, time, term, faculty, sem, subject, batch, '' AS labNo, presentNo, '' AS totalPcUsed, '' AS absentNo, '' AS description FROM tutattendance WHERE id = ?");
     $stmt->bind_param('i', $id);
 } else {
-    $stmt = $conn->prepare("SELECT id, date, logdate, time, term, faculty, sem, subject, batch, labNo, presentNo, totalPcUsed FROM labattendance WHERE id = ?");
+    $stmt = $conn->prepare("SELECT id, date, logdate, time, term, faculty, sem, subject, batch, labNo, presentNo, totalPcUsed, '' AS absentNo, '' AS description FROM labattendance WHERE id = ?");
     $stmt->bind_param('i', $id);
 }
 $stmt->execute();
@@ -100,6 +122,7 @@ if (ctype_digit((string)$record['faculty'])) {
 }
 
 $present_enrollments = csv_values($record['presentNo'] ?? '');
+$absent_enrollments = ($type === 'lecture') ? csv_values($record['absentNo'] ?? '') : [];
 $present_students = [];
 
 if (!empty($present_enrollments)) {
@@ -216,6 +239,12 @@ $back_url = ($type === 'lecture') ? 'lecAttendance.php' : (($type === 'tutorial'
                         <div class="col-6 col-md-3"><strong>Date:</strong> <?= htmlspecialchars($record['date']); ?></div>
                         <div class="col-6 col-md-3"><strong>Slot:</strong> <?= htmlspecialchars($record['time']); ?></div>
                         <div class="col-6 col-md-3"><strong>Log Date:</strong> <?= htmlspecialchars((string)$record['logdate']); ?></div>
+                        <?php if ($type === 'lecture'): ?>
+                            <div class="col-12 col-md-6">
+                                <strong>Description:</strong>
+                                <?= ($record['description'] !== '') ? htmlspecialchars($record['description']) : '<span class="text-muted">-</span>'; ?>
+                            </div>
+                        <?php endif; ?>
                     </div>
                 </div>
             </div>
@@ -246,8 +275,13 @@ $back_url = ($type === 'lecture') ? 'lecAttendance.php' : (($type === 'tutorial'
                 <div class="col-12 col-md-4">
                     <div class="app-card shadow-sm h-100">
                         <div class="app-card-body">
-                            <h5>Total PC Used</h5>
-                            <?php if ($type === 'lecture' || $type === 'tutorial'): ?>
+                            <?php if ($type === 'lecture'): ?>
+                                <h5>Total Absent</h5>
+                                <div class="display-6 mb-0"><?= count($absent_enrollments); ?></div>
+                            <?php else: ?>
+                                <h5>Total PC Used</h5>
+                            <?php endif; ?>
+                            <?php if ($type === 'tutorial'): ?>
                                 <div class="text-muted">Not applicable</div>
                             <?php elseif (!empty($pc_map)): ?>
                                 <?php foreach ($pc_map as $pc_key => $pc_value): ?>
@@ -255,6 +289,8 @@ $back_url = ($type === 'lecture') ? 'lecAttendance.php' : (($type === 'tutorial'
                                 <?php endforeach; ?>
                                 <hr>
                                 <div>Total: <strong><?= (int)$pc_total; ?></strong></div>
+                            <?php elseif ($type === 'lecture'): ?>
+                                <div class="text-muted">From saved absent list.</div>
                             <?php else: ?>
                                 <div class="text-muted">No PC usage data.</div>
                             <?php endif; ?>

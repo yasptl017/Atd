@@ -46,7 +46,10 @@ $conn->close();
     <meta charset="utf-8">
     <meta http-equiv="X-UA-Compatible" content="IE=edge">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <meta name="theme-color" content="#3949ab">
     <link rel="shortcut icon" href="favicon.ico">
+    <link rel="manifest" href="manifest.json">
+    <link rel="apple-touch-icon" href="assets/images/app-logo.svg">
     <link rel="stylesheet" href="assets/css/portal.css">
     <link rel="stylesheet" href="assets/css/custom.css">
     <style>
@@ -250,6 +253,9 @@ $conn->close();
                             </div>
                         </div>
                         <button type="submit" class="btn btn-login w-100">Sign In</button>
+                        <button type="button" class="btn btn-outline-secondary w-100 mt-2 pwa-install-btn d-none">
+                            Install App
+                        </button>
                     </form>
 
                     <?php if (isset($error_message)): ?>
@@ -269,5 +275,6 @@ $conn->close();
 
     <!-- Bootstrap Icons for alert icon -->
     <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.css">
+    <script src="assets/js/pwa-install.js"></script>
 </body>
 </html>

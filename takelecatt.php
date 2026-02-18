@@ -13,6 +13,29 @@ function short_name($full_name) {
     return $full_name;
 }
 
+function lecture_column_exists(mysqli $conn, string $column): bool {
+    $stmt = $conn->prepare("SELECT 1 FROM information_schema.COLUMNS WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'lecattendance' AND COLUMN_NAME = ? LIMIT 1");
+    if (!$stmt) {
+        return false;
+    }
+    $stmt->bind_param('s', $column);
+    $stmt->execute();
+    $exists = $stmt->get_result()->num_rows > 0;
+    $stmt->close();
+    return $exists;
+}
+
+function ensure_lecture_attendance_columns(mysqli $conn): void {
+    if (!lecture_column_exists($conn, 'absentNo')) {
+        $conn->query("ALTER TABLE lecattendance ADD COLUMN absentNo TEXT NULL AFTER presentNo");
+    }
+    if (!lecture_column_exists($conn, 'description')) {
+        $conn->query("ALTER TABLE lecattendance ADD COLUMN description VARCHAR(255) NULL AFTER absentNo");
+    }
+}
+
+ensure_lecture_attendance_columns($conn);
+
 if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['submit_attendance'])) {
     $date    = $_POST['date'];
     $time    = $_POST['slot'];
@@ -20,13 +43,56 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['submit_attendance']))
     $faculty = $_POST['faculty'];
     $sem     = $_POST['sem'];
     $subject = $_POST['subject'];
-    $class   = $_POST['class'];
-    $present = isset($_POST['present']) ? implode(",", $_POST['present']) : '';
+    $class   = trim((string)($_POST['class'] ?? ''));
+    $mark_mode = trim((string)($_POST['mark_mode'] ?? 'normal'));
+    $description = trim((string)($_POST['description'] ?? ''));
 
-    $stmt = $conn->prepare("INSERT INTO lecattendance (date, logdate, time, term, faculty, sem, subject, class, presentNo) VALUES (?, CURDATE(), ?, ?, ?, ?, ?, ?, ?)");
-    $stmt->bind_param("ssssssss", $date, $time, $term, $faculty, $sem, $subject, $class, $present);
+    $present_tokens = isset($_POST['present']) ? array_map('trim', (array)$_POST['present']) : [];
+    $present_tokens = array_values(array_unique(array_filter($present_tokens, function ($value) {
+        return $value !== '';
+    })));
+    if ($mark_mode === 'all_absent') {
+        $present_tokens = [];
+    }
+
+    $class_students_stmt = $conn->prepare("SELECT enrollmentNo FROM students WHERE term = ? AND sem = ? AND class = ? AND enrollmentNo IS NOT NULL AND TRIM(enrollmentNo) <> '' ORDER BY enrollmentNo");
+    $class_students_stmt->bind_param('sss', $term, $sem, $class);
+    $class_students_stmt->execute();
+    $students_res = $class_students_stmt->get_result();
+    $class_enrollments = [];
+    while ($row = $students_res->fetch_assoc()) {
+        $enrollment_no = trim((string)($row['enrollmentNo'] ?? ''));
+        if ($enrollment_no !== '') {
+            $class_enrollments[] = $enrollment_no;
+        }
+    }
+    $class_students_stmt->close();
+
+    $class_enrollment_set = array_flip($class_enrollments);
+    $present_filtered = [];
+    foreach ($present_tokens as $enrollment_no) {
+        if (isset($class_enrollment_set[$enrollment_no])) {
+            $present_filtered[] = $enrollment_no;
+        }
+    }
+
+    $present_set = array_flip($present_filtered);
+    $absent_tokens = [];
+    foreach ($class_enrollments as $enrollment_no) {
+        if (!isset($present_set[$enrollment_no])) {
+            $absent_tokens[] = $enrollment_no;
+        }
+    }
+
+    $present = implode(',', $present_filtered);
+    $absent = implode(',', $absent_tokens);
+    $description_or_null = ($description !== '') ? $description : null;
+
+    $stmt = $conn->prepare("INSERT INTO lecattendance (date, logdate, time, term, faculty, sem, subject, class, presentNo, absentNo, description) VALUES (?, CURDATE(), ?, ?, ?, ?, ?, ?, ?, ?, ?)");
+    $stmt->bind_param("ssssssssss", $date, $time, $term, $faculty, $sem, $subject, $class, $present, $absent, $description_or_null);
     $stmt->execute();
     $attendance_id = (int)$conn->insert_id;
+    $stmt->close();
     header("Location: attendanceSummary.php?type=lecture&id=" . $attendance_id);
     exit();
 }
@@ -43,7 +109,7 @@ $escaped_class = $conn->real_escape_string($data['class']);
 $students_result = $conn->query("SELECT id, enrollmentNo, name, class FROM students WHERE term = '{$escaped_term}' AND sem = '{$escaped_sem}' AND class = '{$escaped_class}' ORDER BY enrollmentNo, name");
 $total_students  = $students_result->num_rows;
 
-// ── Autofill: today's related attendance records ──────────────────────────────
+// â”€â”€ Autofill: today's related attendance records â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 $class_enrollments = [];
 if ($total_students > 0) {
     $students_result->data_seek(0);
@@ -63,35 +129,35 @@ if ($lec_res) {
         $all  = array_filter(array_map('trim', explode(',', (string)$row['presentNo'])));
         $filt = array_values(array_intersect($all, $class_enrollments));
         if (!empty($filt)) {
-            $autofill_records[] = ['type' => 'Lecture', 'label' => 'Lecture · ' . $row['subject'] . ' · ' . $row['time'], 'present' => $filt];
+            $autofill_records[] = ['type' => 'Lecture', 'label' => 'Lecture Â· ' . $row['subject'] . ' Â· ' . $row['time'], 'present' => $filt];
         }
     }
 }
 
-// Lab records today (same term, sem, date) — filter to students of this class
+// Lab records today (same term, sem, date) â€” filter to students of this class
 $lab_res = $conn->query("SELECT id, subject, batch, presentNo FROM labattendance WHERE term='{$escaped_term}' AND sem='{$escaped_sem}' AND date='{$att_date_esc}' AND labNo IS NOT NULL AND labNo!='' ORDER BY id DESC");
 if ($lab_res) {
     while ($row = $lab_res->fetch_assoc()) {
         $all  = array_filter(array_map('trim', explode(',', (string)$row['presentNo'])));
         $filt = array_values(array_intersect($all, $class_enrollments));
         if (!empty($filt)) {
-            $autofill_records[] = ['type' => 'Lab', 'label' => 'Lab · ' . $row['subject'] . ' · Batch ' . $row['batch'], 'present' => $filt];
+            $autofill_records[] = ['type' => 'Lab', 'label' => 'Lab Â· ' . $row['subject'] . ' Â· Batch ' . $row['batch'], 'present' => $filt];
         }
     }
 }
 
-// Tutorial records today — from tutattendance table
+// Tutorial records today â€” from tutattendance table
 $tut_res = $conn->query("SELECT id, subject, batch, presentNo FROM tutattendance WHERE term='{$escaped_term}' AND sem='{$escaped_sem}' AND date='{$att_date_esc}' ORDER BY id DESC");
 if ($tut_res) {
     while ($row = $tut_res->fetch_assoc()) {
         $all  = array_filter(array_map('trim', explode(',', (string)$row['presentNo'])));
         $filt = array_values(array_intersect($all, $class_enrollments));
         if (!empty($filt)) {
-            $autofill_records[] = ['type' => 'Tutorial', 'label' => 'Tutorial · ' . $row['subject'] . ' · Batch ' . $row['batch'], 'present' => $filt];
+            $autofill_records[] = ['type' => 'Tutorial', 'label' => 'Tutorial Â· ' . $row['subject'] . ' Â· Batch ' . $row['batch'], 'present' => $filt];
         }
     }
 }
-// ─────────────────────────────────────────────────────────────────────────────
+// â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 ?>
 <!DOCTYPE html>
 <html lang="en">
@@ -141,7 +207,7 @@ if ($tut_res) {
             <?php if (!empty($autofill_records)): ?>
             <div class="app-card shadow-sm mb-3">
                 <div class="app-card-body">
-                    <h5 class="mb-2"><i class="bi bi-lightning-charge-fill text-warning me-1"></i>Today's Attendance — Click to Autofill</h5>
+                    <h5 class="mb-2"><i class="bi bi-lightning-charge-fill text-warning me-1"></i>Today's Attendance â€” Click to Autofill</h5>
                     <p class="text-muted mb-2" style="font-size:0.82rem;">Only students belonging to Class <strong><?= htmlspecialchars($data['class']) ?></strong> will be marked.</p>
                     <div class="d-flex flex-wrap gap-2">
                         <?php
@@ -164,10 +230,12 @@ if ($tut_res) {
             <?php endif; ?>
 
             <!-- Attendance Form -->
-            <form method="POST" action="takelecatt.php">
+            <form method="POST" action="takelecatt.php" id="lectureAttendanceForm">
                 <?php foreach ($data as $key => $value): ?>
                     <input type="hidden" name="<?= htmlspecialchars($key) ?>" value="<?= htmlspecialchars($value) ?>">
                 <?php endforeach; ?>
+                <input type="hidden" name="mark_mode" id="markModeField" value="normal">
+                <input type="hidden" name="description" id="attendanceDescriptionField" value="">
 
                 <div class="app-card shadow-sm">
                     <div class="app-card-body">
@@ -181,6 +249,9 @@ if ($tut_res) {
                                 </button>
                                 <button type="button" class="btn btn-sm btn-outline-secondary" id="clearAllBtn">
                                     <i class="bi bi-x-lg me-1"></i>Clear All
+                                </button>
+                                <button type="button" class="btn btn-sm btn-outline-danger" id="allAbsentBtn">
+                                    <i class="bi bi-x-octagon me-1"></i>All Ab
                                 </button>
                             </div>
                         </div>
@@ -223,13 +294,55 @@ if ($tut_res) {
                 </div>
             </form>
 
+            <div class="modal fade" id="allAbsentModal" tabindex="-1" aria-hidden="true">
+                <div class="modal-dialog">
+                    <div class="modal-content">
+                        <div class="modal-header">
+                            <h5 class="modal-title">Mark All Absent</h5>
+                            <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+                        </div>
+                        <div class="modal-body">
+                            <p class="mb-2">Optional description (example: No teaching due to Holi):</p>
+                            <textarea class="form-control" id="allAbsentDescription" rows="3" maxlength="255" placeholder="Description (optional)"></textarea>
+                        </div>
+                        <div class="modal-footer">
+                            <button type="button" class="btn btn-outline-secondary" data-bs-dismiss="modal">Cancel</button>
+                            <button type="button" class="btn btn-danger" id="confirmAllAbsentBtn">Save All Absent</button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
         </div>
     </div>
 </div>
 
 <script>
+    const attendanceForm = document.getElementById('lectureAttendanceForm');
+    const submitAttendanceBtn = attendanceForm?.querySelector('button[name="submit_attendance"]');
     const cards = document.querySelectorAll('.student-card');
     const countEl = document.getElementById('present-count');
+    const markModeField = document.getElementById('markModeField');
+    const descriptionField = document.getElementById('attendanceDescriptionField');
+    const allAbsentBtn = document.getElementById('allAbsentBtn');
+    const allAbsentDescription = document.getElementById('allAbsentDescription');
+    const confirmAllAbsentBtn = document.getElementById('confirmAllAbsentBtn');
+    const allAbsentModalEl = document.getElementById('allAbsentModal');
+    const allAbsentModal = (window.bootstrap && allAbsentModalEl) ? bootstrap.Modal.getOrCreateInstance(allAbsentModalEl) : null;
+
+    function setNormalMode() {
+        if (markModeField) markModeField.value = 'normal';
+        if (descriptionField) descriptionField.value = '';
+    }
+
+    function submitAttendanceForm() {
+        if (!attendanceForm || !submitAttendanceBtn) return;
+        if (typeof attendanceForm.requestSubmit === 'function') {
+            attendanceForm.requestSubmit(submitAttendanceBtn);
+        } else {
+            submitAttendanceBtn.click();
+        }
+    }
 
     function updateCount() {
         const checked = document.querySelectorAll('.attendance-checkbox:checked').length;
@@ -242,6 +355,7 @@ if ($tut_res) {
             checkbox.checked = !checkbox.checked;
             card.classList.toggle('bg-success-subtle', checkbox.checked);
             card.classList.toggle('border-success', checkbox.checked);
+            setNormalMode();
             updateCount();
         });
     });
@@ -252,6 +366,7 @@ if ($tut_res) {
             cb.checked = true;
             card.classList.add('bg-success-subtle', 'border-success');
         });
+        setNormalMode();
         updateCount();
     });
 
@@ -261,6 +376,7 @@ if ($tut_res) {
             cb.checked = false;
             card.classList.remove('bg-success-subtle', 'border-success');
         });
+        setNormalMode();
         updateCount();
     });
 
@@ -275,9 +391,49 @@ if ($tut_res) {
                     card.classList.add('bg-success-subtle', 'border-success');
                 }
             });
+            setNormalMode();
             updateCount();
         });
     });
+
+    allAbsentBtn?.addEventListener('click', function () {
+        if (allAbsentDescription) allAbsentDescription.value = '';
+        if (allAbsentModal) {
+            allAbsentModal.show();
+            return;
+        }
+
+        const note = window.prompt('Optional description (example: No teaching due to Holi):', '') || '';
+        if (!window.confirm('Save attendance as all absent?')) {
+            return;
+        }
+        if (markModeField) markModeField.value = 'all_absent';
+        if (descriptionField) descriptionField.value = note.trim();
+        submitAttendanceForm();
+    });
+
+    confirmAllAbsentBtn?.addEventListener('click', function () {
+        cards.forEach(card => {
+            const cb = card.querySelector('.attendance-checkbox');
+            cb.checked = false;
+            card.classList.remove('bg-success-subtle', 'border-success');
+        });
+        updateCount();
+
+        if (markModeField) markModeField.value = 'all_absent';
+        if (descriptionField) descriptionField.value = (allAbsentDescription?.value || '').trim();
+        if (allAbsentModal) allAbsentModal.hide();
+
+        submitAttendanceForm();
+    });
+
+    attendanceForm?.addEventListener('submit', function () {
+        if (markModeField?.value !== 'all_absent') {
+            setNormalMode();
+        }
+    });
+
+    updateCount();
 </script>
 
 <?php include('footer.php'); ?>

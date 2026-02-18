@@ -19,6 +19,9 @@ require_login();
                         Welcome back, <strong><?php echo isset($_SESSION['Name']) ? htmlspecialchars($_SESSION['Name']) : 'User'; ?></strong>
                     </p>
                 </div>
+                <button type="button" class="btn app-btn-secondary pwa-install-btn d-none">
+                    Install App
+                </button>
             </div>
 
             <!-- Quick Access Cards -->

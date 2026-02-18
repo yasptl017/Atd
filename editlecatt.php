@@ -8,6 +8,29 @@ function short_name($full_name) {
     return (count($parts) >= 2) ? $parts[0] . ' ' . $parts[1] : $full_name;
 }
 
+function lecture_column_exists(mysqli $conn, string $column): bool {
+    $stmt = $conn->prepare("SELECT 1 FROM information_schema.COLUMNS WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'lecattendance' AND COLUMN_NAME = ? LIMIT 1");
+    if (!$stmt) {
+        return false;
+    }
+    $stmt->bind_param('s', $column);
+    $stmt->execute();
+    $exists = $stmt->get_result()->num_rows > 0;
+    $stmt->close();
+    return $exists;
+}
+
+function ensure_lecture_attendance_columns(mysqli $conn): void {
+    if (!lecture_column_exists($conn, 'absentNo')) {
+        $conn->query("ALTER TABLE lecattendance ADD COLUMN absentNo TEXT NULL AFTER presentNo");
+    }
+    if (!lecture_column_exists($conn, 'description')) {
+        $conn->query("ALTER TABLE lecattendance ADD COLUMN description VARCHAR(255) NULL AFTER absentNo");
+    }
+}
+
+ensure_lecture_attendance_columns($conn);
+
 $id = (int)($_GET['id'] ?? 0);
 if ($id <= 0) {
     header('Location: editAttendance.php?type=lecture');
@@ -47,9 +70,45 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['delete_attendance']))
 
 // Handle update
 if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['update_attendance'])) {
-    $new_present = isset($_POST['present']) ? implode(',', $_POST['present']) : '';
-    $stmt = $conn->prepare("UPDATE lecattendance SET presentNo = ? WHERE id = ?");
-    $stmt->bind_param('si', $new_present, $id);
+    $new_present_list = isset($_POST['present']) ? array_map('trim', (array)$_POST['present']) : [];
+    $new_present_list = array_values(array_unique(array_filter($new_present_list, function ($value) {
+        return $value !== '';
+    })));
+
+    $class_students_stmt = $conn->prepare("SELECT enrollmentNo FROM students WHERE term = ? AND sem = ? AND class = ? AND enrollmentNo IS NOT NULL AND TRIM(enrollmentNo) <> '' ORDER BY enrollmentNo");
+    $class_students_stmt->bind_param('sss', $record['term'], $record['sem'], $record['class']);
+    $class_students_stmt->execute();
+    $class_res = $class_students_stmt->get_result();
+    $class_enrollments = [];
+    while ($row = $class_res->fetch_assoc()) {
+        $enrollment_no = trim((string)($row['enrollmentNo'] ?? ''));
+        if ($enrollment_no !== '') {
+            $class_enrollments[] = $enrollment_no;
+        }
+    }
+    $class_students_stmt->close();
+
+    $class_set = array_flip($class_enrollments);
+    $new_present_filtered = [];
+    foreach ($new_present_list as $enrollment_no) {
+        if (isset($class_set[$enrollment_no])) {
+            $new_present_filtered[] = $enrollment_no;
+        }
+    }
+
+    $new_present_set = array_flip($new_present_filtered);
+    $new_absent_list = [];
+    foreach ($class_enrollments as $enrollment_no) {
+        if (!isset($new_present_set[$enrollment_no])) {
+            $new_absent_list[] = $enrollment_no;
+        }
+    }
+
+    $new_present = implode(',', $new_present_filtered);
+    $new_absent = implode(',', $new_absent_list);
+
+    $stmt = $conn->prepare("UPDATE lecattendance SET presentNo = ?, absentNo = ? WHERE id = ?");
+    $stmt->bind_param('ssi', $new_present, $new_absent, $id);
     if ($stmt->execute()) {
         $record['presentNo'] = $new_present;
         $success_msg = 'Lecture attendance updated successfully.';

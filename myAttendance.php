@@ -1,6 +1,29 @@
 <?php
 include('dbconfig.php');
 
+function lecture_column_exists(mysqli $conn, string $column): bool {
+    $stmt = $conn->prepare("SELECT 1 FROM information_schema.COLUMNS WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'lecattendance' AND COLUMN_NAME = ? LIMIT 1");
+    if (!$stmt) {
+        return false;
+    }
+    $stmt->bind_param('s', $column);
+    $stmt->execute();
+    $exists = $stmt->get_result()->num_rows > 0;
+    $stmt->close();
+    return $exists;
+}
+
+function ensure_lecture_attendance_columns(mysqli $conn): void {
+    if (!lecture_column_exists($conn, 'absentNo')) {
+        $conn->query("ALTER TABLE lecattendance ADD COLUMN absentNo TEXT NULL AFTER presentNo");
+    }
+    if (!lecture_column_exists($conn, 'description')) {
+        $conn->query("ALTER TABLE lecattendance ADD COLUMN description VARCHAR(255) NULL AFTER absentNo");
+    }
+}
+
+ensure_lecture_attendance_columns($conn);
+
 // ── Auto-create lecmapping table if missing ───────────────────────────────────
 $conn->query("CREATE TABLE IF NOT EXISTS `lecmapping` (
     `id`          INT          NOT NULL AUTO_INCREMENT,
@@ -50,6 +73,13 @@ foreach ($mappings_rows as $m) {
     $repeat_days = array_map('intval', explode(',', $m['repeat_days']));
     $cur = new DateTime($m['start_date']);
     $end = new DateTime($m['end_date']);
+    $today = new DateTime('today');
+    if ($end > $today) {
+        $end = $today;
+    }
+    if ($cur > $end) {
+        continue;
+    }
     $end->modify('+1 day'); // make end inclusive
 
     while ($cur < $end) {
@@ -126,7 +156,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['autofill_pending_max'
     $lab_auto_stmt = $conn->prepare("SELECT presentNo FROM labattendance WHERE term = ? AND sem = ? AND date = ? AND COALESCE(TRIM(labNo), '') <> ''");
     $tut_auto_stmt = $conn->prepare("SELECT presentNo FROM tutattendance WHERE term = ? AND sem = ? AND date = ?");
     $exists_stmt = $conn->prepare("SELECT id FROM lecattendance WHERE date = ? AND time = ? AND term = ? AND sem = ? AND subject = ? AND class = ? LIMIT 1");
-    $insert_stmt = $conn->prepare("INSERT INTO lecattendance (date, logdate, time, term, faculty, sem, subject, class, presentNo) VALUES (?, CURDATE(), ?, ?, ?, ?, ?, ?, ?)");
+    $insert_stmt = $conn->prepare("INSERT INTO lecattendance (date, logdate, time, term, faculty, sem, subject, class, presentNo, absentNo, description) VALUES (?, CURDATE(), ?, ?, ?, ?, ?, ?, ?, ?, ?)");
 
     if (!$class_students_stmt || !$lec_auto_stmt || !$lab_auto_stmt || !$tut_auto_stmt || !$exists_stmt || !$insert_stmt) {
         $redirect_params['err'] = 'Bulk autofill is unavailable right now. Please try again.';
@@ -259,8 +289,23 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['autofill_pending_max'
             continue;
         }
 
+        $class_set = $class_cache[$class_key];
+        $present_set = [];
+        foreach ($present_list as $enrollment_no) {
+            $present_set[$enrollment_no] = true;
+        }
+
+        $absent_list = [];
+        foreach ($class_set as $enrollment_no => $_exists) {
+            if (!isset($present_set[$enrollment_no])) {
+                $absent_list[] = $enrollment_no;
+            }
+        }
+
         $present_csv = implode(',', $present_list);
-        $insert_stmt->bind_param('ssssssss', $date, $time, $term, $faculty, $sem, $subject, $class, $present_csv);
+        $absent_csv = implode(',', $absent_list);
+        $description = null;
+        $insert_stmt->bind_param('ssssssssss', $date, $time, $term, $faculty, $sem, $subject, $class, $present_csv, $absent_csv, $description);
         if ($insert_stmt->execute()) {
             $created++;
             $autofilled++;
